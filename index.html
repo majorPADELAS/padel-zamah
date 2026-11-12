@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Padel Zamah</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Inter:wght@400;600&display=swap">
+<style>
+/* Layout: jedan ekran. Trening = prsten snage; Meč = 3D panoramski teren iz prvog lica; TV režim = samo teren */
+:root{
+  --court:#0c3557;
+  --court-2:#124872;
+  --line:#e9f1f7;
+  --muted:#9db8cf;
+  --ball:#dcef3c;
+  --glass:rgba(233,241,247,.08);
+  --danger:#ff8a65;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--court);color:var(--line);font-family:var(--body);font-size:15px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:max(12px,env(safe-area-inset-top,0px));
+  padding-bottom:max(12px,env(safe-area-inset-bottom,0px));
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+}
+main{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:14px;min-height:100%}
+header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:800;font-size:1.9rem;letter-spacing:.02em;margin:0;text-transform:uppercase}
+.tabs{display:flex;border:2px solid var(--line);border-radius:6px;overflow:hidden}
+.tabs button{border:0;border-radius:0;padding:6px 14px;font-size:1rem;background:transparent}
+.tabs button[aria-selected=true]{background:var(--line);color:var(--court)}
+.label{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+/* Trening */
+.court{position:relative;border:2px solid var(--line);border-radius:6px;background:var(--court-2);
+  aspect-ratio:1/1;max-width:100%;display:grid;place-items:center;overflow:hidden}
+.court::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:2px solid var(--line);opacity:.35}
+.court::after{content:"";position:absolute;top:28%;bottom:28%;left:50%;border-left:2px solid var(--line);opacity:.35}
+.ring{position:relative;z-index:1;width:78%;max-width:100%}
+.ring svg{display:block;width:100%;height:auto;transform:rotate(-90deg)}
+.ring .track{fill:none;stroke:var(--glass);stroke-width:14}
+.ring .live{fill:none;stroke:var(--muted);stroke-width:14;stroke-linecap:round;opacity:.5;transition:stroke-dashoffset 60ms linear}
+.ring .hit{fill:none;stroke:var(--ball);stroke-width:14;stroke-linecap:round;transition:stroke-dashoffset 250ms ease-out}
+.readout{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.big{font-family:var(--display);font-weight:800;font-size:5.2rem;line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:2rem;color:var(--muted)}
+.flash{animation:flash .35s ease-out}
+@keyframes flash{0%{background:var(--ball)}100%{background:var(--court-2)}}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{border-top:2px solid var(--line);padding-top:6px}
+.stat b{display:block;font-family:var(--display);font-size:1.9rem;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* Meč */
+.stage{position:relative;width:100%;height:min(62vh,110vw);border:2px solid var(--line);border-radius:6px;overflow:hidden;background:#0b1a2b}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.hud{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 10px;pointer-events:none}
+.score{font-family:var(--display);font-weight:800;font-size:1.5rem;line-height:1.05;font-variant-numeric:tabular-nums;background:rgba(10,30,50,.72);padding:4px 10px;border-radius:4px}
+.score span{display:flex;justify-content:space-between;gap:14px}
+.score em{font-style:normal;color:var(--ball)}
+.rally{text-align:right;font-family:var(--display);font-size:1.2rem;background:rgba(10,30,50,.72);padding:4px 10px;border-radius:4px}
+.callout{position:absolute;left:0;right:0;top:38%;text-align:center;font-family:var(--display);font-weight:800;
+  font-size:2.6rem;text-transform:uppercase;letter-spacing:.03em;text-shadow:0 2px 12px rgba(0,0,0,.7);pointer-events:none;
+  opacity:0;transition:opacity .4s ease}
+.callout.good{color:var(--ball)}
+.callout.bad{color:var(--danger)}
+.dbg{position:absolute;left:8px;bottom:6px;font:12px/1.3 ui-monospace,Menlo,monospace;color:#fff;background:rgba(0,0,0,.45);padding:2px 6px;border-radius:3px;pointer-events:none}
+.dbg:empty{display:none}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;
+  background:rgba(8,22,38,.62);font-family:var(--display);font-weight:800;font-size:1.8rem;text-transform:uppercase;pointer-events:none}
+.tvExit{position:absolute;right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));
+  padding:6px 12px;font-size:1rem;background:rgba(10,30,50,.72);display:none}
+
+.settings{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field-row{display:flex;justify-content:space-between;font-size:.85rem;color:var(--muted)}
+.field.full{grid-column:1/-1}
+input[type=range]{width:100%;accent-color:var(--ball)}
+select{font:inherit;color:var(--line);background:var(--court-2);border:2px solid var(--line);border-radius:6px;padding:6px 8px}
+.check{display:flex;align-items:center;gap:8px;font-size:.9rem;color:var(--line)}
+.check input{width:20px;height:20px;accent-color:var(--ball)}
+
+.actions{display:flex;gap:10px;margin-top:auto;flex-wrap:wrap}
+button{font-family:var(--display);font-weight:800;font-size:1.25rem;letter-spacing:.06em;text-transform:uppercase;
+  border-radius:6px;padding:14px 16px;border:2px solid var(--line);background:transparent;color:var(--line);cursor:pointer}
+button.primary{flex:1;background:var(--ball);border-color:var(--ball);color:var(--court)}
+button.small{padding:8px 12px;font-size:1rem}
+button:focus-visible{outline:3px solid var(--ball);outline-offset:2px}
+.msg{font-size:.9rem;line-height:1.45;color:var(--muted);min-height:1.4em;margin:0}
+.msg.warn{color:var(--ball)}
+
+/* TV režim: samo teren preko celog ekrana (za AirPlay na TV) */
+body.tv{padding:0}
+body.tv main{max-width:none;height:100%;display:block}
+body.tv header, body.tv .settings, body.tv .msg, body.tv .actions{display:none}
+body.tv .stage, body.tv #matchView .stage{position:fixed;inset:0;width:100%;height:100%;border:0;border-radius:0;z-index:5}
+body.tv .tvExit{display:block}
+body.tv .hud{padding-top:calc(8px + env(safe-area-inset-top,0px));padding-left:calc(10px + env(safe-area-inset-left,0px));padding-right:calc(10px + env(safe-area-inset-right,0px))}
+
+@media (orientation:landscape) and (max-height:600px){
+  main{max-width:none;display:grid;grid-template-columns:1fr minmax(240px,32%);grid-template-rows:auto 1fr auto auto;column-gap:16px;row-gap:8px}
+  header{grid-column:1/-1}
+  #matchView,#trainerView{grid-row:2/5}
+  #matchView .stage{height:calc(100vh - 110px)}
+  .court{aspect-ratio:auto;height:calc(100vh - 200px)}
+  .ring{width:min(78%,calc(100vh - 230px))}
+  .settings{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){.flash{animation:none}.ring .hit,.ring .live{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Padel Zamah</h1>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabTrainer" aria-selected="true">Trening</button>
+      <button role="tab" id="tabMatch" aria-selected="false">Meč</button>
+    </div>
+  </header>
+
+  <section id="trainerView">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="court" id="court">
+        <div class="ring">
+          <svg viewBox="0 0 200 200" aria-hidden="true">
+            <circle class="track" cx="100" cy="100" r="84"/>
+            <circle class="live" id="liveArc" cx="100" cy="100" r="84"/>
+            <circle class="hit" id="hitArc" cx="100" cy="100" r="84"/>
+          </svg>
+          <div class="readout">
+            <span class="big" id="big">0<small>%</small></span>
+            <span class="label">snaga poslednjeg zamaha</span>
+          </div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="label">Zamasi</span><b id="count">0</b></div>
+        <div class="stat"><span class="label">Najjači</span><b id="best">0%</b></div>
+        <div class="stat"><span class="label">Prosek</span><b id="avg">0%</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="matchView" hidden>
+    <div class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="hud">
+        <div class="score">
+          <span>TI <em id="sMe">0</em></span>
+          <span>ONI <em id="sOpp">0</em></span>
+          <span class="label" id="sGames">Gemovi 0–0</span>
+        </div>
+        <div class="rally"><span class="label" id="lvlName">Rekreativac</span><br><span class="label">Rally</span> <b id="rally">0</b><br><span class="label" id="speed"></span></div>
+      </div>
+      <div class="callout" id="callout"></div>
+      <div class="dbg" id="dbg"></div>
+      <div class="overlay" id="overlay">Pritisni Start</div>
+      <button class="tvExit" id="tvExit">Izađi</button>
+    </div>
+  </section>
+
+  <div class="settings">
+    <div class="field full">
+      <div class="field-row"><label for="thr">Osetljivost zamaha</label><span id="thrVal"></span></div>
+      <input type="range" id="thr" min="200" max="900" step="25" value="450">
+    </div>
+    <div class="field matchOnly" hidden>
+      <label class="label" for="diff">Protivnik</label>
+      <select id="diff">
+        <option value="0">Početnik</option>
+        <option value="1" selected>Rekreativac</option>
+        <option value="2">Napredni</option>
+        <option value="3">Pro</option>
+      </select>
+    </div>
+    <div class="field matchOnly" hidden>
+      <div class="field-row"><label for="lat">Kašnjenje TV-a</label><span id="latVal"></span></div>
+      <input type="range" id="lat" min="0" max="300" step="10" value="0">
+    </div>
+    <div class="field matchOnly full" hidden>
+      <label class="check"><input type="checkbox" id="aimRacket" checked> Smer udarca iz ugla reketa</label>
+    </div>
+  </div>
+
+  <p class="msg" id="msg">Drži telefon čvrsto kao dršku reketa i pritisni Start.</p>
+
+  <div class="actions">
+    <button class="primary" id="startBtn">Start</button>
+    <button id="testBtn">Test zvuk</button>
+    <button class="small matchOnly" id="calBtn" hidden>Kalibriši</button>
+    <button class="small matchOnly" id="tvBtn" hidden>TV režim</button>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Podešavanja (pamte se na ovom telefonu) ----------
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("pz_" + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem("pz_" + k, JSON.stringify(v)); } catch (e) {} }
+  };
+  let threshold = store.get("thr", 450);
+  let latencyMs = store.get("lat", 0);
+  let level = store.get("lvl", 1);
+  let aimRacket = store.get("aim", true);
+  $("thr").value = threshold; $("lat").value = latencyMs; $("diff").value = level; $("aimRacket").checked = aimRacket;
+  const showSettings = () => { $("thrVal").textContent = threshold + "°/s"; $("latVal").textContent = latencyMs + " ms"; };
+  showSettings();
+  $("thr").addEventListener("input", e => { threshold = +e.target.value; store.set("thr", threshold); showSettings(); });
+  $("lat").addEventListener("input", e => { latencyMs = +e.target.value; store.set("lat", latencyMs); showSettings(); });
+  $("diff").addEventListener("change", e => { level = +e.target.value; store.set("lvl", level); $("lvlName").textContent = LEVELS[level].name; });
+  $("aimRacket").addEventListener("change", e => { aimRacket = e.target.checked; store.set("aim", aimRacket); });
+
+  const msg = (t, warn) => { $("msg").textContent = t; $("msg").classList.toggle("warn", !!warn); };
+
+  // ---------- Zvuk ----------
+  let ctx = null;
+  function audio() {
+    if (!ctx) {
+      try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (ctx.state === "suspended") ctx.resume();
+    return ctx;
+  }
+  function noiseBurst(dur, filterType, freq, q, vol) {
+    const a = audio(), t = a.currentTime;
+    const len = Math.max(1, Math.floor(a.sampleRate * dur));
+    const buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const src = a.createBufferSource(); src.buffer = buf;
+    const f = a.createBiquadFilter(); f.type = filterType; f.frequency.value = freq; f.Q.value = q;
+    const g = a.createGain(); g.gain.value = vol;
+    src.connect(f).connect(g).connect(a.destination); src.start(t);
+  }
+  function thump(f0, f1, dur, vol) {
+    const a = audio(), t = a.currentTime;
+    const o = a.createOscillator(); o.type = "sine";
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = a.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur + 0.02);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dur + 0.05);
+  }
+  const sfx = {
+    hit(p) { const v = 0.25 + 0.75 * Math.min(p, 1); noiseBurst(0.06, "bandpass", 1500 + 900 * p, 1.1, v); thump(220, 90, 0.08, v * 0.8); },
+    oppHit() { noiseBurst(0.05, "bandpass", 1400, 1.1, 0.22); thump(200, 90, 0.07, 0.18); },
+    bounce() { noiseBurst(0.03, "bandpass", 900, 2, 0.12); },
+    glass() { noiseBurst(0.09, "bandpass", 520, 0.9, 0.35); thump(130, 70, 0.12, 0.35); },
+    mesh() { noiseBurst(0.14, "highpass", 2500, 0.7, 0.18); noiseBurst(0.1, "bandpass", 700, 3, 0.12); },
+    net() { noiseBurst(0.12, "lowpass", 700, 0.7, 0.25); },
+    whoosh() { noiseBurst(0.16, "bandpass", 450, 0.6, 0.18); }
+  };
+  const buzz = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
+
+  // ---------- Senzori: zamah (žiroskop) i ugao reketa (orijentacija) ----------
+  const MAX_DEG = 1800, COOLDOWN_MS = 450;
+  let running = false, gotData = false, inSwing = false, peak = 0, peakT = 0, lastHit = 0;
+  let onSwing = () => {}, onLive = () => {};
+  let faceAtPeak = null;   // lice reketa u trenutku najbrže tačke zamaha
+
+  function onMotion(e) {
+    let mag = 0;
+    const r = e.rotationRate;
+    if (r && (r.alpha != null || r.beta != null || r.gamma != null)) mag = Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0);
+    else { const acc = e.acceleration; if (acc && acc.x != null) mag = Math.hypot(acc.x, acc.y, acc.z) * 40; }
+    if (!isFinite(mag)) return;
+    gotData = true;
+    onLive(mag);
+    const now = performance.now();
+    if (!inSwing) {
+      if (mag > threshold && now - lastHit > COOLDOWN_MS) { inSwing = true; peak = mag; peakT = now; faceAtPeak = racketFace(); }
+    } else if (mag > peak) {
+      peak = mag; peakT = now; faceAtPeak = racketFace();
+    } else if (mag < peak * 0.7 || mag < threshold * 0.6) {
+      inSwing = false; lastHit = now;
+      onSwing(Math.min(peak / MAX_DEG, 1), peakT, faceAtPeak);
+    }
+  }
+
+  // Orijentacija telefona → kvaternion u koordinatama scene (y gore, teren ide ka -z)
+  const HAS3D = typeof THREE !== "undefined";
+  let AUTO = /auto/.test(location.hash);
+  window.addEventListener("hashchange", () => { AUTO = /auto/.test(location.hash); });
+  let haveOrient = false, needCal = true;
+  let qRaw, qCal, qM, qTmp, eul, vTmp;
+  if (HAS3D) {
+    qRaw = new THREE.Quaternion(); qCal = new THREE.Quaternion(); qTmp = new THREE.Quaternion();
+    qM = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    eul = new THREE.Euler(); vTmp = new THREE.Vector3();
+  }
+  function onOrient(e) {
+    if (!HAS3D || e.alpha == null) return;
+    const d = Math.PI / 180;
+    eul.set((e.beta || 0) * d, (e.gamma || 0) * d, e.alpha * d, "ZXY");
+    qRaw.setFromEuler(eul).premultiply(qM);
+    haveOrient = true;
+    if (needCal) calibrate();
+  }
+  function calibrate() {
+    // Okreće svet tako da pravac u koji je vrh telefona uperen (ka TV-u) postane "ka mreži"
+    const h = new THREE.Vector3(0, 1, 0).applyQuaternion(qRaw);
+    let dir = h;
+    if (Math.hypot(h.x, h.z) < 0.35) dir = new THREE.Vector3(0, 0, 1).applyQuaternion(qRaw).negate();
+    const yaw = Math.atan2(dir.x, dir.z);
+    qCal.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI - yaw);
+    needCal = false;
+  }
+  function racketQuat(out) { return out.copy(qRaw).premultiply(qCal); }
+  function racketFace() {
+    if (!HAS3D || !haveOrient) return null;
+    racketQuat(qTmp);
+    return new THREE.Vector3(0, 0, 1).applyQuaternion(qTmp);
+  }
+
+  // ---------- Mod: Trening ----------
+  const C = 2 * Math.PI * 84;
+  const liveArc = $("liveArc"), hitArc = $("hitArc");
+  [liveArc, hitArc].forEach(a => { a.style.strokeDasharray = C; a.style.strokeDashoffset = C; });
+  const setArc = (el, pct) => { el.style.strokeDashoffset = C * (1 - Math.min(pct, 100) / 100); };
+  let tCount = 0, tBest = 0, tSum = 0;
+  function trainerSwing(power) {
+    const pct = Math.round(power * 100);
+    tCount++; tSum += pct; tBest = Math.max(tBest, pct);
+    sfx.hit(power); buzz(25);
+    $("big").innerHTML = pct + "<small>%</small>";
+    $("count").textContent = tCount; $("best").textContent = tBest + "%";
+    $("avg").textContent = Math.round(tSum / tCount) + "%";
+    setArc(hitArc, pct);
+    const court = $("court"); court.classList.remove("flash"); void court.offsetWidth; court.classList.add("flash");
+  }
+
+  // ---------- Mod: Meč — pravila, taktika i fizika ----------
+  // Svet: x = širina (-5..5 m, + desno), z = dubina od tvog zadnjeg stakla (0) do njihovog (20), y = visina
+  const G = 9.8, NET_Z = 10, NET_H = 0.88, EYE = 1.73, CAM_BACK = 1.45;
+  const GLASS_H = 3, WALL_H = 4, SIDE_GLASS = 4;   // panoramski teren: staklo 3 m, bočno staklo 4 m sa svakog kraja
+  const PZ_BACK = 2.0, PZ_NET = 7.0;               // gde udaraš: pozadi ili na mreži (3 m od mreže)
+  const OPP_BACK = 18.6, OPP_NET = 12.8;
+  const REACH = 2.25, SMASH_MAX = 3.3;             // do 2,25 m udarac/volej, do 3,3 m smeč, iznad toga ne stižeš
+  const LEVELS = [
+    { name: "Početnik",    window: 0.18,  feedT: 1.25, bzMin: 3.8, bzMax: 6.0, spread: 2.2, oppMiss: 0.30, lob: 0.00, winF: 0.45, goodLob: 0.2 },
+    { name: "Rekreativac", window: 0.14,  feedT: 1.05, bzMin: 3.5, bzMax: 6.6, spread: 3.0, oppMiss: 0.18, lob: 0.06, winF: 0.35, goodLob: 0.4 },
+    { name: "Napredni",    window: 0.11,  feedT: 0.92, bzMin: 3.3, bzMax: 7.0, spread: 3.6, oppMiss: 0.10, lob: 0.12, winF: 0.25, goodLob: 0.6 },
+    { name: "Pro",         window: 0.085, feedT: 0.80, bzMin: 3.1, bzMax: 7.4, spread: 4.2, oppMiss: 0.05, lob: 0.18, winF: 0.16, goodLob: 0.8 }
+  ];
+  $("lvlName").textContent = LEVELS[level].name;
+
+  const game = {
+    on: false, phase: "wait", waitUntil: 0, pendingOpp: 0, pendingPoint: 0, phaseStart: 0,
+    ball: { x: 0, y: 1, z: 19, vx: 0, vy: 0, vz: 0, visible: false, kick: false },
+    myB: 0, oppB: 0, lastShot: null, rally: 0,
+    me: 0, opp: 0, gMe: 0, gOpp: 0,
+    playerX: 0, pz: PZ_BACK, atNet: false, side: 1, contactX: 0, contactY: 1, zoneGlow: 0, swingAnim: 0, retreating: false,
+    oppX: 0, oppZ: OPP_BACK, oppNet: false, oppKind: "drive"
+  };
+
+  function callout(text, kind) {
+    const el = $("callout"); el.textContent = text; el.className = "callout " + (kind || "");
+    el.style.opacity = 1; clearTimeout(callout.t);
+    callout.t = setTimeout(() => { el.style.opacity = 0; }, 900);
+  }
+  const PTS = ["0", "15", "30", "40"];
+  function renderScore() {
+    const golden = game.me === 3 && game.opp === 3;
+    $("sMe").textContent = PTS[game.me] || "40";
+    $("sOpp").textContent = PTS[game.opp] || "40";
+    $("sGames").textContent = golden ? "Zlatni poen" : "Gemovi " + game.gMe + "–" + game.gOpp;
+    $("rally").textContent = game.rally;
+  }
+  function pointTo(who, reason) {
+    if (game.phase === "wait") return;
+    game.phase = "wait"; game.pendingOpp = 0; game.pendingPoint = 0;
+    if (who === "me") game.me++; else game.opp++;
+    let text = reason;
+    // Zlatni poen: ko prvi osvoji 4 poena, uzima gem
+    if (game.me >= 4 || game.opp >= 4) {
+      if (game.me >= 4) game.gMe++; else game.gOpp++;
+      text = reason + (game.me >= 4 ? " · Gem tvoj" : " · Gem njihov");
+      game.me = 0; game.opp = 0;
+      if ((game.gMe >= 6 || game.gOpp >= 6) && Math.abs(game.gMe - game.gOpp) >= 2) {
+        text = (game.gMe > game.gOpp ? "Set tvoj " : "Set njihov ") + game.gMe + "–" + game.gOpp;
+        game.gMe = 0; game.gOpp = 0;
+      }
+    }
+    callout(text, who === "me" ? "good" : "bad");
+    game.rally = 0; renderScore();
+    game.waitUntil = performance.now() + 1800;
+    // Novi poen počinje sa obe strane pozadi
+    game.atNet = false; game.oppNet = false; game.retreating = false;
+  }
+  const hitterWins = r => pointTo(game.phase === "incoming" ? "opp" : "me", r);
+  const hitterLoses = r => pointTo(game.phase === "incoming" ? "me" : "opp", r);
+  const onReceiverSide = z => game.phase === "incoming" ? z < NET_Z : z > NET_Z;
+  const receiverBounces = () => game.phase === "incoming" ? game.myB : game.oppB;
+
+  // Visina lopte kad stigne do ravni z (pre sledećeg odskoka); null ako ne stiže
+  function heightAtPlane(zPlane) {
+    const b = game.ball;
+    if (Math.abs(b.vz) < 0.3) return null;
+    const t = (zPlane - b.z) / b.vz;
+    if (t < 0) return null;
+    const y = b.y + b.vy * t - 0.5 * G * t * t;
+    return y > 0 ? { y, t } : null;
+  }
+
+  function launch(x0, y0, z0, bx, bz, T) {
+    const b = game.ball;
+    b.x = x0; b.y = y0; b.z = z0;
+    b.vx = (bx - x0) / T; b.vz = (bz - z0) / T;
+    b.vy = (0 - y0 + 0.5 * G * T * T) / T;
+    b.visible = true; b.kick = false; game.myB = 0; game.oppB = 0;
+    game.phaseStart = performance.now();
+  }
+  // Ispali loptu i, ako treba, produži let dok sigurno ne pređe mrežu
+  function launchOver(x0, y0, z0, bx, bz, T, margin) {
+    const b = game.ball;
+    for (let i = 0; i < 10; i++) {
+      launch(x0, y0, z0, bx, bz, T);
+      const tn = (NET_Z - z0) / b.vz;
+      if (tn <= 0 || y0 + b.vy * tn - 0.5 * G * tn * tn > NET_H + margin) break;
+      T *= 1.08;
+    }
+    return T;
+  }
+  const speedKmh = () => { const b = game.ball; return Math.round(Math.hypot(b.vx, b.vy, b.vz) * 3.6); };
+
+  // Protivnik: pozadi bira udarac ili lob (pa izlazi na mrežu); na mreži volej ili smeč
+  function oppShot(kind) {
+    const d = LEVELS[level], b = game.ball;
+    const x0 = clamp(b.visible ? (b.x + game.oppX - 0.5) / 2 : game.oppX, -4.5, 4.5);
+    const z0 = clamp(b.visible ? Math.min(b.z, game.oppZ - 0.3) : OPP_BACK, 11.5, 19.4);
+    const y0 = clamp(b.visible ? b.y : 1.0, 0.5, 3.2);
+    if (!kind) {
+      if (game.oppNet) kind = "volley";
+      else kind = Math.random() < d.lob + (game.atNet ? 0.25 + 0.15 * level : 0) ? "lob" : "drive";
+    }
+    const bx = (Math.random() * 2 - 1) * d.spread;
+    if (kind === "lob") {
+      // Dobar lob prelazi preko tebe na mreži (visoko, duboko), slab ostaje na visini smeča
+      const good = Math.random() < d.goodLob;
+      const bz = good ? 1.6 + Math.random() * 1.6 : 3.2 + Math.random() * 1.2;
+      launchOver(x0, y0, z0, bx * 0.7, bz, good ? 2.0 + Math.random() * 0.3 : 1.65 + Math.random() * 0.15, 1.5);
+      game.oppNet = true;   // posle loba ide na mrežu
+      callout("Lob!", "");
+    } else if (kind === "volley") {
+      launchOver(x0, Math.max(0.7, y0), z0, bx, d.bzMin + Math.random() * (d.bzMax - d.bzMin), d.feedT * 0.8, 0.12);
+    } else if (kind === "smash") {
+      const bz = 3 + Math.random() * 4;
+      launchOver(x0, y0, z0, bx, bz, (z0 - bz) / (18 + 6 * level), 0.1);
+      callout("Smeč!", "bad");
+    } else {
+      launchOver(x0, 1.1, z0, bx, d.bzMin + Math.random() * (d.bzMax - d.bzMin), d.feedT * (0.9 + Math.random() * 0.2), 0.2);
+    }
+    game.oppKind = kind;
+    game.phase = "incoming"; game.side = 0; game.retreating = false; sfx.oppHit();
+  }
+
+  // Tvoj udarac. Snaga zamaha = brzina. Smer = gde gleda lice reketa (ili tajming kad igraš tapom).
+  function myShot(power, eN, face, kind, hint) {
+    const b = game.ball, z0 = game.pz, y0 = Math.max(0.4, b.y), x0 = b.x;
+    let bx, bz, T, isLob = false;
+    let theta = 0, elev = 0;
+    if (face && aimRacket) {
+      const n = face.clone();
+      if (n.z > 0) n.negate();
+      theta = clamp(Math.atan2(n.x, -n.z) + eN * 0.15, -0.6, 0.6);
+      elev = Math.asin(clamp(n.y, -1, 1));
+    } else {
+      const side = b.x >= game.playerX ? 1 : -1;
+      elev = hint === "lob" ? 0.6 : 0.05;
+    }
+    // Bez ugla reketa (tap): rano = dijagonala, kasno = paralela, uvek ka terenu
+    const tapX = () => clamp(-(b.x >= game.playerX ? 1 : -1) * eN * 3.6 + (Math.random() - 0.5) * 1.2, -4.3, 4.3);
+    const aimX = (bzz, lim) => face && aimRacket ? clamp(x0 + Math.tan(theta) * (bzz - z0), -lim, lim) : tapX();
+    if (kind === "smash") {
+      bz = clamp(13.5 + 3.5 * power + (Math.random() - 0.5), 12, 19);
+      bx = aimX(bz, 4.8);
+      T = (bz - z0) / (14 + 14 * power);
+      launchOver(x0, y0, z0, bx, bz, T, 0.15);
+      // Jak i čist smeč sa mreže odskoči preko zida: "por tres"
+      if (power > 0.82 && Math.abs(eN) < 0.5 && z0 > 5) b.kick = true;
+    } else if (elev > 0.42) {
+      isLob = true;
+      bz = clamp(17 + 2.2 * power + (elev - 0.42) * 2, 15.5, 21);
+      bx = aimX(bz, 6) * (face && aimRacket ? 1 : 0.7);
+      T = 1.7 + elev * 0.5 + 0.2 * power;
+      launchOver(x0, y0, z0, bx, bz, T, 1.5);
+    } else {
+      bz = clamp(12.5 + 5 * power + elev * 8, 8, 23);
+      if (!(face && aimRacket)) {
+        bz = 13 + 4.6 * power + Math.random() * 0.8;
+        if (Math.abs(eN) > 0.7 && Math.random() < 0.35) bz = 9.3;
+        else if (power > 0.9 && Math.abs(eN) > 0.5 && Math.random() < 0.3) bz = 20.8;
+      }
+      bx = aimX(bz, 6.5);
+      T = Math.max(0.5, 1.5 - 0.9 * power) + Math.max(0, elev) * 1.2;
+      launch(x0, y0, z0, bx, bz, T);
+    }
+    game.phase = "outgoing";
+    game.lastShot = { power, eN, kind: isLob ? "lob" : kind, bz };
+    game.rally++; renderScore();
+    $("speed").textContent = speedKmh() + " km/h";
+    if (isLob) game.atNet = true;          // posle svog loba ideš na mrežu
+  }
+
+  function matchSwing(power, tPeak, face, hint) {
+    game.swingAnim = 1;
+    if (!game.on) return;
+    const b = game.ball, now = performance.now();
+    if (game.phase !== "incoming" || !b.visible || Math.abs(b.vz) < 0.5 || Math.abs(b.z - game.pz) > 4) { sfx.whoosh(); return; }
+    const d = LEVELS[level];
+    const tc = (game.pz - b.z) / b.vz;                       // kad lopta stiže do tebe
+    const ts = (tPeak - now) / 1000 - latencyMs / 1000;       // kad si zamahnuo, ispravljeno za kašnjenje TV-a
+    const e = ts - tc;
+    const yc = tc > 0 ? b.y + b.vy * tc - 0.5 * G * tc * tc : b.y;
+    if (yc > SMASH_MAX) { sfx.whoosh(); callout("Previsoko", "bad"); return; }
+    if (Math.abs(e) > d.window || tc > 0.6) { sfx.whoosh(); callout(e < 0 ? "Rano" : "Kasno", "bad"); return; }
+    const eN = e / d.window;
+    const kind = yc > REACH ? "smash" : game.myB === 0 ? "volley" : "drive";
+    sfx.hit(kind === "smash" ? Math.min(1, power + 0.2) : power); buzz(kind === "smash" ? 45 : 30);
+    myShot(power, eN, face, kind, hint);
+    const q = Math.abs(eN);
+    const label = kind === "smash" ? "Smeč" : kind === "volley" ? "Volej" : (game.lastShot.kind === "lob" ? "Lob" : "");
+    callout(label ? label + (q < 0.3 ? "!" : "") : (q < 0.3 ? "Savršeno" : q < 0.6 ? "Dobro" : (eN < 0 ? "Malo rano" : "Malo kasno")),
+            q < 0.6 ? "good" : "");
+  }
+
+  // Odbijanje od zida: staklo je predvidivo, žica nije
+  function wallBounce(axis, isMesh) {
+    const b = game.ball;
+    const k = isMesh ? 0.2 + Math.random() * 0.3 : 0.55;
+    if (axis === "z") { b.vz = -b.vz * k; b.vx *= isMesh ? 0.5 + Math.random() * 0.6 : 0.8; }
+    else { b.vx = -b.vx * k; b.vz *= isMesh ? 0.5 + Math.random() * 0.5 : 0.9; }
+    if (isMesh) { b.vy *= 0.4 + Math.random() * 0.5; sfx.mesh(); } else sfx.glass();
+  }
+  function hitWall(axis, isMesh) {
+    const b = game.ball;
+    if (b.y > WALL_H) {   // preko zida, van terena
+      if (onReceiverSide(b.z) && receiverBounces() > 0) hitterWins(b.kick ? "Por tres!" : "Van terena!");
+      else hitterLoses("Aut");
+      b.visible = false; return;
+    }
+    if (onReceiverSide(b.z) && receiverBounces() === 0) hitterLoses("Aut");   // zid pre poda = aut
+    wallBounce(axis, isMesh);
+  }
+
+  // Protivnik na mreži presreće lopticu pre odskoka
+  function oppIntercept(prevZ) {
+    const b = game.ball, plane = game.oppZ - 0.3;
+    if (!game.oppNet || game.phase !== "outgoing" || game.oppB > 0) return;
+    if (!(prevZ < plane && b.z >= plane)) return;
+    const s = game.lastShot || { power: 0.5, eN: 0, bz: 15 };
+    if (s.bz > 20.3 || Math.abs(b.x) > 4.8) return;               // pušta loptu koja ide u aut
+    if (b.y > SMASH_MAX - 0.2) { game.oppNet = false; return; }   // lob preko njega: beži nazad
+    const q = 1 - Math.min(Math.abs(s.eN), 1);
+    const pWin = LEVELS[level].oppMiss + LEVELS[level].winF * s.power * q * q * (s.kind === "smash" ? 1.6 : 1);
+    if (Math.random() < pWin) return;                               // promašio volej, lopta prolazi
+    oppShot(b.y > REACH ? "smash" : "volley");
+  }
+
+  function step(dt) {
+    const b = game.ball;
+    if (!b.visible) return;
+    const pz = b.z;
+    b.vy -= G * dt;
+    b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+
+    if ((pz < NET_Z) !== (b.z < NET_Z) && b.y < NET_H) {
+      sfx.net(); b.vz *= -0.15; b.vx *= 0.3; b.z = pz;
+      hitterLoses(game.phase === "incoming" ? "Oni u mrežu" : "U mrežu");
+    }
+    oppIntercept(pz);
+    if (b.y <= 0.035 && b.vy < 0) {
+      b.y = 0.035; b.vy = -b.vy * 0.72; b.vx *= 0.95; b.vz *= 0.95;
+      if (Math.abs(b.vy) < 0.4) b.vy = 0;
+      sfx.bounce();
+      if (b.z < NET_Z) {
+        game.myB++;
+        if (game.phase === "outgoing") hitterLoses("U mrežu");
+        else if (game.phase === "incoming" && game.myB >= 2) hitterWins("Dva odskoka");
+      } else {
+        game.oppB++;
+        if (game.phase === "incoming") { hitterLoses("Oni u mrežu"); return; }
+        if (game.phase === "outgoing" && game.oppB === 1) {
+          if (b.kick) { b.vy = 9.5; b.vz = Math.max(b.vz * 0.4, 5); }   // smeč odskače visoko ka staklu
+          decideOpp();
+        }
+        else if (game.phase === "outgoing" && game.oppB >= 2) hitterWins("Winner");
+      }
+    }
+    if (b.z <= 0 && b.vz < 0) { b.z = 0; hitWall("z", b.y > GLASS_H); }
+    else if (b.z >= 20 && b.vz > 0) { b.z = 20; hitWall("z", b.y > GLASS_H); }
+    if (b.visible && Math.abs(b.x) >= 5 && b.vx * b.x > 0) {
+      b.x = Math.sign(b.x) * 5;
+      const glassZone = b.z <= SIDE_GLASS || b.z >= 20 - SIDE_GLASS;
+      hitWall("x", !(glassZone && b.y <= GLASS_H));
+    }
+    if (game.phase === "incoming" && b.vz > 0 && b.z > Math.max(game.pz + 1.5, 3.5)) hitterWins("Nisi stigao");
+  }
+
+  function decideOpp() {
+    const s = game.lastShot || { power: 0.5, eN: 0 };
+    const q = 1 - Math.min(Math.abs(s.eN), 1);
+    const smashF = s.kind === "smash" ? 1.8 : 1;
+    const pWin = game.ball.kick ? 1 : LEVELS[level].oppMiss + LEVELS[level].winF * s.power * q * q * smashF;
+    game.oppNet = false;   // lopta je odskočila kod njega: igra je pozadi
+    if (Math.random() < pWin) game.pendingPoint = performance.now() + (game.ball.kick ? 2500 : 900);
+    else game.pendingOpp = performance.now() + 300 + Math.random() * 250;
+  }
+
+  function update(dt, now) {
+    const b = game.ball;
+    if (game.on) {
+      if (game.phase === "wait" && now > game.waitUntil) { b.visible = false; game.pendingPoint = 0; oppShot("drive"); }
+      if (game.pendingOpp && now > game.pendingOpp && game.phase === "outgoing") { game.pendingOpp = 0; oppShot(); }
+      if (game.pendingPoint && now > game.pendingPoint && game.phase === "outgoing") { game.pendingPoint = 0; pointTo("me", "Winner"); }
+      if (game.phase !== "wait" && now - game.phaseStart > 7000) hitterWins("Nisi stigao");
+      for (let i = 0; i < 3; i++) step(dt / 3);
+      // Test-mod (taster A): igrica sama udara, ponekad lobuje
+      if (AUTO && game.phase === "incoming" && b.visible && Math.abs(b.vz) > 0.5 && game.autoBall !== game.phaseStart) {
+        const tc = (game.pz - b.z) / b.vz;
+        const yc = tc > 0 ? b.y + b.vy * tc - 0.5 * G * tc * tc : b.y;
+        if (tc > 0 && tc < 0.03 && yc < SMASH_MAX) {
+          game.autoBall = game.phaseStart;
+          matchSwing(0.55 + Math.random() * 0.4, now, null, !game.atNet && Math.random() < 0.3 ? "lob" : "");
+        }
+      }
+    }
+    if (AUTO && R) {
+      $("dbg").textContent = game.phase + " | lopta y" + b.y.toFixed(1) + " z" + b.z.toFixed(1) + " | ti z" + game.pz.toFixed(1) +
+        (game.atNet ? " mreža" : "") + " | on z" + game.oppZ.toFixed(1) + (game.oppNet ? " mreža" : "");
+    }
+
+    // Tvoja pozicija po dubini: mreža posle loba; slab lob = ostaješ za smeč, jak lob = trčiš nazad na staklo
+    if (game.phase === "incoming" && b.visible && game.atNet && !game.retreating && b.z < NET_Z + 2) {
+      const h = heightAtPlane(game.pz);
+      if (game.oppKind === "lob" && (!h || h.y > SMASH_MAX) && game.myB === 0) {
+        game.retreating = true; game.atNet = false; callout("Nazad!", "");
+      }
+    }
+    const pzTarget = game.atNet ? PZ_NET : PZ_BACK;
+    game.pz += clamp(pzTarget - game.pz, -(game.retreating ? 6 : 4) * dt, 4 * dt);
+
+    // Levo-desno: igrač sam ide do loptice; desnoruki forhend desno, bekhend levo
+    if (game.phase === "incoming" && b.visible) {
+      const t = Math.abs(b.vz) > 0.3 ? (game.pz - b.z) / b.vz : -1;
+      const px = clamp(t > 0 ? b.x + b.vx * t : b.x, -4.6, 4.6);
+      if (!game.side && b.z < NET_Z) game.side = px >= game.playerX - 0.1 ? 1 : -1;
+      game.contactX = px;
+      if (t > 0) game.contactY = clamp(b.y + b.vy * t - 0.5 * G * t * t, 0.3, SMASH_MAX);
+      const target = clamp(px - (game.side || 1) * 0.65, -4.3, 4.3);
+      game.playerX += clamp(target - game.playerX, -5 * dt, 5 * dt);
+    } else {
+      game.playerX += clamp(0 - game.playerX, -2 * dt, 2 * dt);
+    }
+
+    // Protivnik: na mreži stoji blizu mreže, pozadi prati lopticu do stakla
+    const onOppSide = b.visible && b.z > NET_Z && game.phase === "outgoing";
+    const oppTarget = onOppSide ? clamp(b.x + 0.5, -4.4, 4.4) : game.oppNet ? clamp(b.x * 0.5, -3, 3) : 0;
+    const oppTargetZ = game.oppNet ? OPP_NET : onOppSide && game.oppB > 0 ? clamp(b.z + 0.6, 15.5, 19.4) : OPP_BACK;
+    game.oppX += clamp(oppTarget - game.oppX, -5 * dt, 5 * dt);
+    game.oppZ += clamp(oppTargetZ - game.oppZ, -5 * dt, 5 * dt);
+
+    const near = game.phase === "incoming" && b.visible ? Math.max(0, 1 - Math.abs(b.z - game.pz) / 4) : 0;
+    game.zoneGlow += (near - game.zoneGlow) * Math.min(1, dt * 10);
+    game.swingAnim = Math.max(0, game.swingAnim - dt * 3.5);
+  }
+
+  // ---------- Mod: Meč — 3D scena (three.js) ----------
+  const cv = $("cv");
+  let R = null;   // renderer i objekti scene
+  const P = (x, y, z) => new THREE.Vector3(x, y, -z);   // svet → scena
+  const Y_AXIS = HAS3D ? new THREE.Vector3(0, 1, 0) : null;
+
+  function canvasTex(w, h, draw) {
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    draw(c.getContext("2d"), w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  }
+  function initThree() {
+    if (R || !HAS3D) return;
+    const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1a2b);
+    scene.fog = new THREE.Fog(0x0b1a2b, 30, 70);
+    const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 120);
+
+    scene.add(new THREE.HemisphereLight(0xe6efff, 0x1a2a3a, 0.85));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(4, 14, -6); scene.add(sun);
+
+    const mat = (color, extra) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.8, metalness: 0.05 }, extra || {}));
+
+    // Okolina i podloga (plava trava kao na Premier Padel turnirima)
+    const outer = new THREE.Mesh(new THREE.PlaneGeometry(60, 70), mat(0x132538, { roughness: 1 }));
+    outer.rotation.x = -Math.PI / 2; outer.position.set(0, -0.01, -10); scene.add(outer);
+    const turf = canvasTex(64, 64, (g, w, h) => {
+      g.fillStyle = "#1f5fa8"; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 500; i++) { g.fillStyle = Math.random() < 0.5 ? "rgba(255,255,255,.035)" : "rgba(0,0,0,.05)"; g.fillRect(Math.random() * w, Math.random() * h, 1, 1); }
+    });
+    turf.repeat.set(10, 20);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(10, 20), new THREE.MeshStandardMaterial({ map: turf, roughness: 1 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0, -10); scene.add(floor);
+
+    // Linije: servis linije 6,95 m od mreže, centralna linija između njih
+    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const addLine = (x1, z1, x2, z2) => {
+      const w = Math.abs(x2 - x1) || 0.05, d = Math.abs(z2 - z1) || 0.05;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lineMat);
+      m.rotation.x = -Math.PI / 2; m.position.copy(P((x1 + x2) / 2, 0.004, (z1 + z2) / 2)); scene.add(m);
+    };
+    addLine(-5, 3.05, 5, 3.05); addLine(-5, 16.95, 5, 16.95); addLine(0, 2.85, 0, 17.15);
+
+    // Mreža
+    const netTex = canvasTex(32, 32, (g, w, h) => { g.strokeStyle = "rgba(20,20,20,.9)"; g.lineWidth = 2; g.strokeRect(0, 0, w, h); });
+    netTex.repeat.set(10 / 0.1, 0.88 / 0.1);
+    const net = new THREE.Mesh(new THREE.PlaneGeometry(10, NET_H), new THREE.MeshBasicMaterial({ map: netTex, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+    net.position.copy(P(0, NET_H / 2, NET_Z)); scene.add(net);
+    const tape = new THREE.Mesh(new THREE.BoxGeometry(10, 0.05, 0.02), mat(0xffffff, { roughness: 0.5 }));
+    tape.position.copy(P(0, NET_H, NET_Z)); scene.add(tape);
+    for (const sx of [-5.05, 5.05]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.92, 12), mat(0x111418, { metalness: 0.6 }));
+      post.position.copy(P(sx, 0.46, NET_Z)); scene.add(post);
+    }
+
+    // Staklo (3 m) i žica
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0xcfe6ff, transparent: true, opacity: 0.13, roughness: 0.05, metalness: 0.2, side: THREE.DoubleSide, depthWrite: false });
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0xa8c3da, transparent: true, opacity: 0.55 });
+    const meshTex = canvasTex(32, 32, (g, w, h) => { g.strokeStyle = "rgba(30,34,40,.95)"; g.lineWidth = 3; g.strokeRect(0, 0, w, h); });
+    const meshMat = (w, h) => { const t = meshTex.clone(); t.needsUpdate = true; t.repeat.set(w / 0.15, h / 0.15); return new THREE.MeshBasicMaterial({ map: t, transparent: true, side: THREE.DoubleSide, depthWrite: false }); };
+    const steel = mat(0x15181d, { metalness: 0.7, roughness: 0.4 });
+    function panel(w, h, cx, cy, cz, alongX, kind) {
+      const geo = new THREE.PlaneGeometry(w, h);
+      const m = new THREE.Mesh(geo, kind === "glass" ? glassMat : meshMat(w, h));
+      m.position.copy(P(cx, cy, cz)); if (!alongX) m.rotation.y = Math.PI / 2; scene.add(m);
+      if (kind === "glass") {
+        const e = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat); e.position.copy(m.position); e.rotation.copy(m.rotation); scene.add(e);
+      }
+    }
+    for (const z of [0, 20]) {
+      for (let i = 0; i < 5; i++) panel(2, GLASS_H, -4 + i * 2, GLASS_H / 2, z, true, "glass");   // 5 ploča po 2 m
+      panel(10, 1, 0, 3.5, z, true, "mesh");
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(10, 0.06, 0.06), steel); beam.position.copy(P(0, GLASS_H, z)); scene.add(beam);
+    }
+    for (const x of [-5, 5]) {
+      for (const z0 of [0, 20 - SIDE_GLASS]) {
+        panel(2, GLASS_H, x, GLASS_H / 2, z0 + 1, false, "glass");
+        panel(2, GLASS_H, x, GLASS_H / 2, z0 + 3, false, "glass");
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, SIDE_GLASS), steel); beam.position.copy(P(x, GLASS_H, z0 + 2)); scene.add(beam);
+      }
+      panel(2, 1, x, 3.5, 1, false, "mesh"); panel(2, 1, x, 3.5, 19, false, "mesh");
+      panel(20 - 2 * SIDE_GLASS, GLASS_H, x, GLASS_H / 2, 10, false, "mesh");
+      // Stubovi sa reflektorima (6 m)
+      for (const z of [5, 15]) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 6, 10), steel);
+        pole.position.copy(P(x * 1.06, 3, z)); scene.add(pole);
+        const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.15, 0.35), new THREE.MeshBasicMaterial({ color: 0xfff6dd }));
+        lamp.position.copy(P(x * 1.0, 6, z)); scene.add(lamp);
+      }
+    }
+
+    // Loptica i senka
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.045, 20, 14), mat(0xdcef3c, { emissive: 0x3a4400, roughness: 0.6 }));
+    scene.add(ball);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.06, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
+    shadow.rotation.x = -Math.PI / 2; scene.add(shadow);
+    const zone = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.2, 32), new THREE.MeshBasicMaterial({ color: 0xdcef3c, transparent: true, opacity: 0, depthWrite: false }));
+    scene.add(zone);
+
+    // Protivnik
+    const opp = new THREE.Group();
+    const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.8, 12), mat(0x1c2633)); legs.position.y = 0.4;
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.19, 0.75, 14), mat(0xff7a3d)); body.position.y = 1.18;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), mat(0xe8c4a0)); head.position.y = 1.7;
+    const oRacket = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.03, 20), mat(0x222222)); oRacket.rotation.z = Math.PI / 2; oRacket.position.set(-0.4, 1.1, 0);
+    opp.add(legs, body, head, oRacket); scene.add(opp);
+
+    // Tvoj reket: drška ide duž lokalne +y ose, lice reketa gleda duž +z (isto kao osе telefona)
+    const racket = new THREE.Group();
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.02, 0.17, 12), mat(0x111111)); handle.position.y = 0.085;
+    const headGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.035, 40); headGeo.rotateX(Math.PI / 2); headGeo.scale(1, 1.15, 1);
+    const holes = canvasTex(128, 128, (g, w, h) => {
+      g.fillStyle = "#1b1d22"; g.fillRect(0, 0, w, h);
+      g.fillStyle = "#0a0b0d";
+      for (let y = 10; y < h; y += 14) for (let x = 10 + ((y / 14) % 2) * 7; x < w; x += 14) { g.beginPath(); g.arc(x, y, 3, 0, Math.PI * 2); g.fill(); }
+    });
+    holes.wrapS = holes.wrapT = THREE.ClampToEdgeWrapping;
+    const rHead = new THREE.Mesh(headGeo, new THREE.MeshStandardMaterial({ map: holes, roughness: 0.6, transparent: true, opacity: 0.88 }));
+    rHead.position.y = 0.17 + 0.15;
+    const rimGeo = new THREE.TorusGeometry(0.13, 0.011, 8, 48); rimGeo.scale(1, 1.15, 1);
+    const rim = new THREE.Mesh(rimGeo, mat(0xdcef3c, { roughness: 0.4 })); rim.position.y = rHead.position.y;
+    racket.add(handle, rHead, rim);
+    racket.scale.setScalar(0.85);
+    scene.add(racket);
+
+    R = { yaw: 0, pitch: -0.12, renderer, scene, camera, ball, shadow, zone, opp, racket, qSmooth: new THREE.Quaternion(), qIdle: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5, 0, -0.3)) };
+    resize3d();
+  }
+  function resize3d() {
+    if (!R) return;
+    const w = cv.clientWidth || 1, h = cv.clientHeight || 1;
+    R.renderer.setSize(w, h, false);
+    R.camera.aspect = w / h;
+    R.camera.fov = w / h < 1 ? 80 : 68;   // uspravan telefon treba širi ugao
+    R.camera.updateProjectionMatrix();
+  }
+  function render3d() {
+    if (!R) return;
+    const b = game.ball, px = game.playerX, camZ = game.pz - CAM_BACK;
+    R.camera.position.copy(P(px, EYE, camZ));
+    // Karakter gleda u lopticu (najviše 90° u stranu, kao kad se okreneš ka bočnom staklu)
+    let tx = px * 0.6, ty = 0.75, tz = 10;
+    if (b.visible) {
+      const w = game.phase === "outgoing" ? 0.35 : b.z < NET_Z ? 1 : 0.55;   // svoj udarac pratiš samo pogledom, ne glavom
+      tx += (b.x - tx) * w; ty += (b.y - ty) * w; tz += (b.z - tz) * w;
+    }
+    const dx = tx - px, dy = ty - EYE, dz = tz - camZ;
+    let yaw = Math.atan2(dx, dz);
+    if (Math.abs(yaw) > Math.PI / 2) yaw = Math.sign(dx || R.yaw || 1) * Math.PI / 2;
+    const pitch = clamp(Math.atan2(dy, Math.hypot(dx, dz)), -0.6, game.phase === "incoming" ? 1.1 : 0.35);
+    R.yaw += (yaw - R.yaw) * 0.16; R.pitch += (pitch - R.pitch) * 0.16;
+    R.camera.lookAt(P(px + Math.sin(R.yaw) * Math.cos(R.pitch), EYE + Math.sin(R.pitch), camZ + Math.cos(R.yaw) * Math.cos(R.pitch)));
+
+    R.ball.visible = R.shadow.visible = b.visible;
+    if (b.visible) {
+      R.ball.position.copy(P(b.x, Math.max(0.045, b.y), b.z));
+      R.shadow.position.copy(P(b.x, 0.006, b.z));
+      const s = 1 + Math.min(b.y, 4) * 0.25; R.shadow.scale.set(s, s, s);
+      R.shadow.material.opacity = 0.35 / s;
+    }
+    R.zone.position.copy(P(game.contactX, game.contactY, game.pz));
+    R.zone.material.opacity = 0.55 * game.zoneGlow;
+
+    R.opp.position.copy(P(game.oppX, 0, game.oppZ));
+    R.opp.rotation.y = 0;
+
+    // Reket je ispred tebe, desno, i okreće se kao telefon
+    const sd = game.side || 1;
+    R.racket.position.copy(P(px + 0.3 * sd, game.contactY > REACH && game.zoneGlow > 0.2 ? 1.7 : 1.0, camZ + 0.95));
+    if (haveOrient) {
+      racketQuat(qTmp);
+      R.qSmooth.slerp(qTmp, 0.55);
+      R.racket.quaternion.copy(R.qSmooth);
+    } else {
+      R.racket.quaternion.copy(R.qIdle);
+      if (sd < 0) R.racket.rotateZ(0.6);
+      R.racket.rotateOnWorldAxis(Y_AXIS, -sd * game.swingAnim * 1.5);   // zamah kad igraš tapom
+    }
+    R.renderer.render(R.scene, R.camera);
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (mode === "match") { update(dt, performance.now()); render3d(); }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- Modovi i dugmad ----------
+  let mode = "trainer";
+  function setMode(m) {
+    mode = m;
+    $("tabTrainer").setAttribute("aria-selected", m === "trainer");
+    $("tabMatch").setAttribute("aria-selected", m === "match");
+    $("trainerView").hidden = m !== "trainer";
+    $("matchView").hidden = m !== "match";
+    document.querySelectorAll(".matchOnly").forEach(el => { el.hidden = m !== "match"; });
+    onSwing = m === "trainer" ? (p) => trainerSwing(p) : (p, t, f, h) => matchSwing(p, t, f, h);
+    onLive = m === "trainer" ? (mag) => setArc(liveArc, mag / MAX_DEG * 100) : () => {};
+    if (m === "match") {
+      if (!HAS3D) { $("overlay").textContent = "3D nije učitan. Proveri internet pa osveži stranicu."; return; }
+      try { initThree(); } catch (err) { $("overlay").textContent = "Telefon ne podržava 3D prikaz (WebGL)."; return; }
+      resize3d();
+      game.on = running; if (running) { game.phase = "wait"; game.waitUntil = performance.now() + 800; }
+      $("overlay").hidden = running;
+    } else { game.on = false; document.body.classList.remove("tv"); }
+    msg(m === "match"
+      ? "Drži telefon kao reket, okrenut ka TV-u, i pritisni Start. Zamahni kad loptica stigne do žutog kruga."
+      : "Drži telefon čvrsto kao dršku reketa i pritisni Start.");
+  }
+  $("tabTrainer").addEventListener("click", () => setMode("trainer"));
+  $("tabMatch").addEventListener("click", () => setMode("match"));
+  window.addEventListener("resize", () => { if (mode === "match") resize3d(); });
+
+  $("cv").addEventListener("pointerdown", () => { audio(); onSwing(0.7, performance.now(), null); });
+  window.addEventListener("keydown", e => {
+    if (e.code === "Space" && mode === "match") { e.preventDefault(); audio(); onSwing(0.7, performance.now(), null); }
+    if (e.code === "KeyL" && mode === "match") { audio(); onSwing(0.6, performance.now(), null, "lob"); }
+    if (e.code === "KeyA" && mode === "match") { AUTO = !AUTO; if (!AUTO) $("dbg").textContent = ""; }
+  });
+  $("calBtn").addEventListener("click", () => {
+    needCal = true;
+    msg(haveOrient ? "Kalibrisano: pravac u koji je telefon bio uperen sada je ka mreži."
+                   : "Ugao telefona još ne stiže. Prvo pritisni Start i dozvoli senzore.", !haveOrient);
+  });
+  $("tvBtn").addEventListener("click", () => { document.body.classList.add("tv"); setTimeout(resize3d, 50); });
+  $("tvExit").addEventListener("click", e => { e.stopPropagation(); document.body.classList.remove("tv"); setTimeout(resize3d, 50); });
+
+  // ---------- Start / Stop ----------
+  let wakeLock = null;
+  async function keepAwake() { try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) { wakeLock = null; } }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && running) keepAwake(); });
+
+  async function start() {
+    audio();
+    let sensors = window.isSecureContext && typeof DeviceMotionEvent !== "undefined";
+    if (sensors) {
+      // iPhone: obe dozvole se traže odmah, iz istog dodira (jedan prozor "Pokret i orijentacija")
+      const reqs = [];
+      if (typeof DeviceMotionEvent.requestPermission === "function") reqs.push(DeviceMotionEvent.requestPermission());
+      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") reqs.push(DeviceOrientationEvent.requestPermission());
+      const res = await Promise.all(reqs.map(p => p.catch(() => "denied")));
+      if (res.some(r => r !== "granted")) sensors = false;
+    }
+    if (sensors) {
+      window.addEventListener("devicemotion", onMotion);
+      window.addEventListener("deviceorientation", onOrient);
+    }
+    running = true; gotData = false; needCal = true;
+    keepAwake();
+    $("startBtn").textContent = "Stop";
+    if (mode === "match") { game.on = true; game.phase = "wait"; game.waitUntil = performance.now() + 1200; $("overlay").hidden = true; }
+    if (!sensors) {
+      msg("Senzori nisu dostupni ovde (ili nisu dozvoljeni). Igraj tapom na teren. Pravi reket radi preko https linka u Safariju.", true);
+    } else {
+      msg(mode === "match" ? "Kalibrisano prema pravcu u kom si držao telefon. Zamahni kad loptica stigne do žutog kruga."
+                           : "Spreman. Zamahni forhendom ili bekhendom.");
+      setTimeout(() => { if (running && !gotData) msg("Ne stižu podaci sa senzora. Igraj tapom na teren.", true); }, 1500);
+    }
+  }
+  function stop() {
+    window.removeEventListener("devicemotion", onMotion);
+    window.removeEventListener("deviceorientation", onOrient);
+    running = false; inSwing = false; game.on = false; haveOrient = false;
+    setArc(liveArc, 0);
+    try { if (wakeLock) wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+    $("startBtn").textContent = "Start";
+    if (mode === "match") { $("overlay").hidden = false; $("overlay").textContent = "Pauza"; }
+    msg("Pauza. Pritisni Start za nastavak.");
+  }
+  $("startBtn").addEventListener("click", () => running ? stop() : start());
+  $("testBtn").addEventListener("click", () => { audio(); sfx.hit(0.5 + Math.random() * 0.5); });
+
+  setMode("trainer");
+  renderScore();
+  requestAnimationFrame(frame);
+
+  // Izloženo samo za automatsku proveru logike
+  window.__pz = { game, step, launch, oppShot, myShot, matchSwing, pointTo, update, LEVELS, setLevel: l => { level = l; }, setAim: a => { aimRacket = a; } };
+})();
+</script>
+</body>
+</html>
