@@ -268,7 +268,9 @@ body.tv .hud{padding-top:calc(8px + env(safe-area-inset-top,0px));padding-left:c
   // ---------- Senzori: zamah i ugao reketa ----------
   // Snaga = brzina ruke, ne brzina okretanja. Iz okretanja (ω) i ubrzanja (a) računamo polugu r = a/ω² i brzinu v = a/ω:
   // trzaj zglobom ima kratku polugu i malu brzinu, pun zamah ramenom dugu polugu i veliku brzinu.
-  const MAX_DEG = 1800, COOLDOWN_MS = 450, V_FULL = 9;   // V_FULL: brzina ruke (m/s) koja je 100% snage
+  const MAX_DEG = 1800, COOLDOWN_MS = 700;
+  // Podešeno po tvojim zamasima: jak forhend ~25 km/h, smeč do ~280 m/s². Snaga = veće od brzine ruke i ubrzanja.
+  const V_FULL = 7.5, A_FULL = 260, MIN_V = 2, MIN_A = 30;
   let running = false, gotData = false, inSwing = false, peak = 0, peakT = 0, lastHit = 0;
   let onSwing = () => {}, onLive = () => {};
   let faceAtPeak = null;   // lice reketa u trenutku najbrže tačke zamaha
@@ -297,8 +299,10 @@ body.tv .hud{padding-top:calc(8px + env(safe-area-inset-top,0px));padding-left:c
       if (v > vPeak && mag > peak * 0.5) { vPeak = v; rAtV = acc / (w * w); }
       if (mag < peak * 0.7 || mag < threshold * 0.6) {
         inSwing = false; lastHit = now;
+        // Povratak reketa posle udarca i pripremu ne računamo: preslab pokret ruke nije udarac
+        if (aPeak > 0 && (aPeak < MIN_A || vPeak < MIN_V)) return;
         // Bez akcelerometra ostaje stari način (samo okretanje)
-        const power = aPeak > 0 ? Math.min(vPeak / V_FULL, 1) : Math.min(peak / MAX_DEG, 1);
+        const power = aPeak > 0 ? Math.min(Math.max(vPeak / V_FULL, aPeak / A_FULL), 1) : Math.min(peak / MAX_DEG, 1);
         if (mode === "trainer") {
           msg("Ruka " + Math.round(vPeak * 3.6) + " km/h · poluga " + Math.round(rAtV * 100) + " cm · okret " +
               Math.round(peak) + "°/s · ubrzanje " + Math.round(aPeak) + " m/s²");
