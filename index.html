@@ -979,8 +979,22 @@ body.tv .hud{padding-top:calc(8px + env(safe-area-inset-top,0px));padding-left:c
   requestAnimationFrame(frame);
 
   // Izloženo samo za automatsku proveru logike
-  window.__pz = { game, step, launch, oppShot, myShot, matchSwing, pointTo, update, LEVELS, setLevel: l => { level = l; }, setAim: a => { aimRacket = a; } };
+  window.__pz = { game, step, launch, oppShot, myShot, matchSwing, pointTo, update, LEVELS, setLevel: l => { level = l; }, setAim: a => { aimRacket = a; },
+    // Veza telefon ↔ ekran (veza.js)
+    api: {
+      audio, msg, setMode, trainerSwing,
+      get mode() { return mode; }, get running() { return running; },
+      swing: (p, t, f) => onSwing(p, t, f),
+      setOnSwing: fn => { onSwing = fn; },
+      racketQuat: () => haveOrient && HAS3D ? racketQuat(new THREE.Quaternion()).toArray() : null,
+      setRemoteQuat: q => { if (!HAS3D) return; qRaw.fromArray(q); qCal.identity(); needCal = false; haveOrient = true; },
+      startRemote: () => { audio(); running = true; $("startBtn").textContent = "Stop"; if (mode !== "match") setMode("match"); game.on = true; game.phase = "wait"; game.waitUntil = performance.now() + 1500; $("overlay").hidden = true; },
+      tv: on => { document.body.classList.toggle("tv", on); setTimeout(resize3d, 50); }
+    } };
 })();
 </script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="veza.js"></script>
 </body>
 </html>
