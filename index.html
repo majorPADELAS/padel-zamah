@@ -265,28 +265,46 @@ body.tv .hud{padding-top:calc(8px + env(safe-area-inset-top,0px));padding-left:c
   };
   const buzz = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
 
-  // ---------- Senzori: zamah (žiroskop) i ugao reketa (orijentacija) ----------
-  const MAX_DEG = 1800, COOLDOWN_MS = 450;
+  // ---------- Senzori: zamah i ugao reketa ----------
+  // Snaga = brzina ruke, ne brzina okretanja. Iz okretanja (ω) i ubrzanja (a) računamo polugu r = a/ω² i brzinu v = a/ω:
+  // trzaj zglobom ima kratku polugu i malu brzinu, pun zamah ramenom dugu polugu i veliku brzinu.
+  const MAX_DEG = 1800, COOLDOWN_MS = 450, V_FULL = 9;   // V_FULL: brzina ruke (m/s) koja je 100% snage
   let running = false, gotData = false, inSwing = false, peak = 0, peakT = 0, lastHit = 0;
   let onSwing = () => {}, onLive = () => {};
   let faceAtPeak = null;   // lice reketa u trenutku najbrže tačke zamaha
+  let vPeak = 0, aPeak = 0, rAtV = 0;
 
   function onMotion(e) {
-    let mag = 0;
-    const r = e.rotationRate;
+    let mag = 0, acc = 0;
+    const r = e.rotationRate, la = e.acceleration;
     if (r && (r.alpha != null || r.beta != null || r.gamma != null)) mag = Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0);
-    else { const acc = e.acceleration; if (acc && acc.x != null) mag = Math.hypot(acc.x, acc.y, acc.z) * 40; }
+    if (la && la.x != null) acc = Math.hypot(la.x, la.y, la.z);
+    if (!mag && acc) mag = acc * 40;
     if (!isFinite(mag)) return;
     gotData = true;
     onLive(mag);
     const now = performance.now();
+    const w = mag * Math.PI / 180;                          // rad/s
+    const v = w > 2 ? Math.min(acc / w, 20) : 0;            // m/s
     if (!inSwing) {
-      if (mag > threshold && now - lastHit > COOLDOWN_MS) { inSwing = true; peak = mag; peakT = now; faceAtPeak = racketFace(); }
-    } else if (mag > peak) {
-      peak = mag; peakT = now; faceAtPeak = racketFace();
-    } else if (mag < peak * 0.7 || mag < threshold * 0.6) {
-      inSwing = false; lastHit = now;
-      onSwing(Math.min(peak / MAX_DEG, 1), peakT, faceAtPeak);
+      if (mag > threshold && now - lastHit > COOLDOWN_MS) {
+        inSwing = true; peak = mag; peakT = now; faceAtPeak = racketFace();
+        vPeak = v; aPeak = acc; rAtV = w > 2 ? acc / (w * w) : 0;
+      }
+    } else {
+      if (mag > peak) { peak = mag; peakT = now; faceAtPeak = racketFace(); }
+      if (acc > aPeak) aPeak = acc;
+      if (v > vPeak && mag > peak * 0.5) { vPeak = v; rAtV = acc / (w * w); }
+      if (mag < peak * 0.7 || mag < threshold * 0.6) {
+        inSwing = false; lastHit = now;
+        // Bez akcelerometra ostaje stari način (samo okretanje)
+        const power = aPeak > 0 ? Math.min(vPeak / V_FULL, 1) : Math.min(peak / MAX_DEG, 1);
+        if (mode === "trainer") {
+          msg("Ruka " + Math.round(vPeak * 3.6) + " km/h · poluga " + Math.round(rAtV * 100) + " cm · okret " +
+              Math.round(peak) + "°/s · ubrzanje " + Math.round(aPeak) + " m/s²");
+        }
+        onSwing(power, peakT, faceAtPeak);
+      }
     }
   }
 
